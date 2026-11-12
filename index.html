@@ -29,7 +29,10 @@
   main{padding:14px;max-width:560px;margin:0 auto;padding-bottom:40px}
   .card{background:var(--card);border-radius:16px;padding:14px;margin-bottom:14px;
     box-shadow:0 1px 3px rgba(0,0,0,.06)}
-  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}
+  .stats{display:grid;grid-template-columns:1fr 1fr;gap:12px 8px;text-align:center}
+  .periodo{text-align:center;font-size:14px;color:var(--muted);margin-bottom:10px}
+  .stat .x{font-size:13px;color:var(--muted)}
+  .stat.bal .n{color:#0f5c8c}
   .stat .n{font-size:26px;font-weight:800}
   .stat .l{font-size:13px;color:var(--muted)}
   .stat.liq .n{color:var(--liq)} .stat.ori .n{color:var(--ori)} .stat.tmp .n{color:var(--tmp)}
@@ -94,15 +97,17 @@
 
 <main>
   <div class="card">
+    <div class="periodo" id="sPer"></div>
     <div class="stats">
-      <div class="stat liq"><div class="n" id="sLiq">0</div><div class="l">ml tomados hoy</div></div>
-      <div class="stat ori"><div class="n" id="sOri">0</div><div class="l">veces orinó hoy</div></div>
+      <div class="stat liq"><div class="n" id="sLiq">0</div><div class="l">ml tomados</div></div>
+      <div class="stat ori"><div class="n" id="sOri">0</div><div class="l">ml orinados</div><div class="x" id="sOriX"></div></div>
+      <div class="stat bal"><div class="n" id="sBal">0</div><div class="l">diferencia (ml)</div><div class="x">tomado − orinado</div></div>
       <div class="stat tmp"><div class="n" id="sTmp">–</div><div class="l" id="sTmpL">última temperatura</div></div>
     </div>
   </div>
 
   <button class="big liq" data-open="liq"><span class="ic">💧</span><span>Tomó líquido<small>Agua, jugo, sopa…</small></span></button>
-  <button class="big ori" data-open="ori"><span class="ic">🚽</span><span>Orinó<small>Se guarda con la hora de ahora</small></span></button>
+  <button class="big ori" data-open="ori"><span class="ic">🚽</span><span>Orinó<small>Anotar cuántos ml orinó</small></span></button>
   <button class="big tmp" data-open="tmp"><span class="ic">🌡️</span><span>Temperatura<small>Anotar grados °C</small></span></button>
 
   <div class="card">
@@ -141,15 +146,25 @@ if (navigator.storage && navigator.storage.persist) navigator.storage.persist().
 const $ = s => document.querySelector(s);
 const pad = n => String(n).padStart(2,"0");
 function dayKey(t){ const d = new Date(t); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
-viewDay = dayKey(Date.now());
+const CORTE = 7; // la jornada va de 7:00 am a 7:00 am
+function jKey(t){ return dayKey(t - CORTE*3600e3); }
+function jStart(k){ const [y,m,d]=k.split("-").map(Number); return new Date(y,m-1,d,CORTE,0,0,0).getTime(); }
+viewDay = jKey(Date.now());
 function hhmm(t){ const d = new Date(t); return pad(d.getHours())+":"+pad(d.getMinutes()); }
 function fecha(t){ const d = new Date(t); return pad(d.getDate())+"/"+pad(d.getMonth()+1)+"/"+d.getFullYear(); }
+function corto(t){ const d=new Date(t); return d.toLocaleDateString("es",{weekday:"short"}).replace(".","")+" "+pad(d.getDate())+"/"+pad(d.getMonth()+1); }
 function dayLabel(k){
-  const [y,m,d] = k.split("-").map(Number), dt = new Date(y,m-1,d);
-  const hoy = dayKey(Date.now()), ayer = dayKey(Date.now()-864e5);
-  const txt = dt.toLocaleDateString("es",{weekday:"long",day:"numeric",month:"long"});
-  return (k===hoy?"Hoy, ":k===ayer?"Ayer, ":"") + txt;
+  const a = jStart(k), b = a + 864e5, act = jKey(Date.now());
+  const pre = k===act ? "Jornada actual" : k===jKey(Date.now()-864e5) ? "Jornada anterior" : "Jornada";
+  return pre+'<div style="font-weight:500;font-size:14px;color:var(--muted)">'+corto(a)+' 7 am → '+corto(b)+' 7 am</div>';
 }
+function totales(items){
+  const liq = items.filter(r=>r.tipo==="liq").reduce((a,r)=>a+(r.ml||0),0);
+  const oris = items.filter(r=>r.tipo==="ori");
+  const ori = oris.reduce((a,r)=>a+(r.ml||0),0);
+  return {liq, ori, n: oris.length, sinMedir: oris.filter(r=>!r.ml).length, bal: liq-ori};
+}
+function signo(n){ return (n>0?"+":n<0?"−":"")+fmtNum(Math.abs(n)); }
 function fmtNum(n){ return n.toLocaleString("es-VE"); }
 function fmtT(v){ return v.toFixed(1).replace(".",","); }
 function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("on"); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove("on"),2200); }
@@ -158,24 +173,27 @@ function esc(s){ return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",
 /* ---------- pantalla principal ---------- */
 function render(){
   $("#patientLbl").textContent = cfg.paciente ? "Paciente: "+cfg.paciente : "Toca ⚙️ para poner el nombre";
-  const hoy = dayKey(Date.now()), rh = regs.filter(r=>dayKey(r.t)===hoy);
-  $("#sLiq").textContent = fmtNum(rh.filter(r=>r.tipo==="liq").reduce((a,r)=>a+(r.ml||0),0));
-  $("#sOri").textContent = rh.filter(r=>r.tipo==="ori").length;
+  const hoy = jKey(Date.now()), T = totales(regs.filter(r=>jKey(r.t)===hoy));
+  const ini = jStart(hoy), fin = ini + 864e5;
+  $("#sPer").innerHTML = "Desde "+(dayKey(ini)===dayKey(Date.now())?"hoy":"ayer")+" 7:00 am · se reinicia "+(dayKey(fin)===dayKey(Date.now())?"hoy":"mañana")+" a las 7:00 am";
+  $("#sLiq").textContent = fmtNum(T.liq);
+  $("#sOri").textContent = fmtNum(T.ori);
+  $("#sOriX").innerHTML = T.n+" "+(T.n===1?"vez":"veces")+(T.sinMedir?' · <span class="fever">'+T.sinMedir+' sin medir</span>':"");
+  $("#sBal").textContent = signo(T.bal);
   const temps = regs.filter(r=>r.tipo==="tmp").sort((a,b)=>b.t-a.t);
   if (temps.length){
     const u = temps[0];
     $("#sTmp").innerHTML = '<span class="'+(u.temp>=38?"fever":"")+'">'+fmtT(u.temp)+'°</span>';
-    $("#sTmpL").textContent = "a las "+hhmm(u.t)+(dayKey(u.t)===hoy?"":" ("+fecha(u.t).slice(0,5)+")");
+    $("#sTmpL").textContent = "a las "+hhmm(u.t)+(dayKey(u.t)===dayKey(Date.now())?"":" ("+fecha(u.t).slice(0,5)+")");
   } else { $("#sTmp").textContent="–"; $("#sTmpL").textContent="última temperatura"; }
 
-  $("#dayLbl").textContent = dayLabel(viewDay);
+  $("#dayLbl").innerHTML = dayLabel(viewDay);
   $("#nextDay").style.visibility = viewDay>=hoy ? "hidden" : "visible";
-  const items = regs.filter(r=>dayKey(r.t)===viewDay).sort((a,b)=>b.t-a.t);
-  if (!items.length){ $("#list").innerHTML = '<div class="empty">Sin registros este día</div>'; }
+  const items = regs.filter(r=>jKey(r.t)===viewDay).sort((a,b)=>b.t-a.t);
+  if (!items.length){ $("#list").innerHTML = '<div class="empty">Sin registros en esta jornada</div>'; }
   else {
-    const tl = items.filter(r=>r.tipo==="liq").reduce((a,r)=>a+(r.ml||0),0);
-    const to = items.filter(r=>r.tipo==="ori").length;
-    $("#list").innerHTML = '<div class="note" style="margin:0 0 6px">Total: <b>'+fmtNum(tl)+' ml</b> tomados · orinó <b>'+to+'</b> '+(to===1?"vez":"veces")+'</div>' +
+    const J = totales(items);
+    $("#list").innerHTML = '<div class="note" style="margin:0 0 6px;text-align:center">Tomó <b>'+fmtNum(J.liq)+' ml</b> · orinó <b>'+fmtNum(J.ori)+' ml</b> ('+J.n+' '+(J.n===1?"vez":"veces")+') · diferencia <b>'+signo(J.bal)+' ml</b>'+(J.sinMedir?' · '+J.sinMedir+' sin medir':'')+'</div>' +
       items.map(r=>{
         let ic, main, sub="";
         if (r.tipo==="liq"){ ic="💧"; main=fmtNum(r.ml)+" ml"; sub=r.sub||""; }
@@ -291,15 +309,15 @@ function doSave(){
   if (s.nota) rec.nota=s.nota;
   regs = regs.filter(r=>r.id!==rec.id); regs.push(rec);
   if (!save(KEY, regs)) return;
-  closeSheet(); viewDay = dayKey(rec.t); render();
+  closeSheet(); viewDay = jKey(rec.t); render();
   toast(s.editing ? "Cambios guardados" : "Guardado a las "+hhmm(rec.t)+" ✔");
 }
 
 document.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",()=>openSheet(b.dataset.open)));
 $("#list").addEventListener("click", e=>{ const b=e.target.closest("[data-edit]"); if(!b) return;
   const r = regs.find(x=>x.id===b.dataset.edit); if (r) openSheet(r.tipo, r); });
-$("#prevDay").onclick = ()=>{ const [y,m,d]=viewDay.split("-").map(Number); viewDay=dayKey(new Date(y,m-1,d-1)); render(); };
-$("#nextDay").onclick = ()=>{ const [y,m,d]=viewDay.split("-").map(Number); viewDay=dayKey(new Date(y,m-1,d+1)); render(); };
+$("#prevDay").onclick = ()=>{ viewDay=dayKey(jStart(viewDay)-864e5+3600e3); render(); };
+$("#nextDay").onclick = ()=>{ viewDay=dayKey(jStart(viewDay)+864e5+3600e3); render(); };
 $("#cfgBtn").onclick = ()=>{
   const n = prompt("Nombre del paciente (sale en el Excel):", cfg.paciente||"");
   if (n!==null){ cfg.paciente = n.trim(); save(CFG,cfg); render(); }
@@ -362,35 +380,37 @@ function buildXlsx(){
   const titulo = "Control de líquidos y temperatura"+(cfg.paciente?" — "+cfg.paciente:"");
 
   const r1=[[{v:titulo,s:T}],[gen],[],
-    ["Fecha","Hora","Tipo","Líquido ingerido (ml)","Qué tomó","Orina (ml)","Temperatura (°C)","Nota"].map(v=>({v,s:H}))];
-  for (const r of all) r1.push([fecha(r.t),hhmm(r.t),tipoTxt[r.tipo],
+    ["Jornada (7am a 7am)","Fecha","Hora","Tipo","Líquido ingerido (ml)","Qué tomó","Orina (ml)","Temperatura (°C)","Nota"].map(v=>({v,s:H}))];
+  const jTxt = k => { const a=jStart(k); return fecha(a).slice(0,5)+" → "+fecha(a+864e5).slice(0,5); };
+  for (const r of all) r1.push([jTxt(jKey(r.t)),fecha(r.t),hhmm(r.t),tipoTxt[r.tipo],
     r.tipo==="liq"?r.ml:null, r.tipo==="liq"?(r.sub||""):null,
     r.tipo==="ori"?(r.ml||"No medida"):null,
     r.tipo==="tmp"?{v:r.temp,s:N1}:null, r.nota||""]);
 
   const dias = {};
   for (const r of all){
-    const k=dayKey(r.t); const d = dias[k] || (dias[k]={f:fecha(r.t),liq:0,nOri:0,mlOri:0,ts:[]});
+    const k=jKey(r.t); const a=jStart(k);
+    const d = dias[k] || (dias[k]={de:fecha(a)+" 07:00",a:fecha(a+864e5)+" 07:00",liq:0,nOri:0,mlOri:0,sm:0,ts:[]});
     if (r.tipo==="liq") d.liq+=r.ml||0;
-    if (r.tipo==="ori"){ d.nOri++; d.mlOri+=r.ml||0; }
+    if (r.tipo==="ori"){ d.nOri++; d.mlOri+=r.ml||0; if(!r.ml) d.sm++; }
     if (r.tipo==="tmp") d.ts.push(r.temp);
   }
-  const r2=[[{v:"Resumen por día"+(cfg.paciente?" — "+cfg.paciente:""),s:T}],[gen],[],
-    ["Fecha","Líquido ingerido total (ml)","Veces que orinó","Orina medida total (ml)","Temp. mínima (°C)","Temp. máxima (°C)","Tomas de temperatura"].map(v=>({v,s:H}))];
+  const r2=[[{v:"Balance de 24 h (7:00 am a 7:00 am)"+(cfg.paciente?" — "+cfg.paciente:""),s:T}],[gen],[],
+    ["Desde","Hasta","Líquido ingerido (ml)","Orina (ml)","Diferencia ingerido − orinado (ml)","Veces que orinó","Orinas sin medir","Temp. mínima (°C)","Temp. máxima (°C)","Tomas de temperatura"].map(v=>({v,s:H}))];
   for (const k of Object.keys(dias).sort()){
     const d=dias[k];
-    r2.push([d.f,d.liq,d.nOri,d.mlOri||null,
+    r2.push([d.de,d.a,d.liq,d.mlOri,d.liq-d.mlOri,d.nOri,d.sm,
       d.ts.length?{v:Math.min(...d.ts),s:N1}:null, d.ts.length?{v:Math.max(...d.ts),s:N1}:null, d.ts.length]);
   }
 
   const files = [
     {name:"[Content_Types].xml", data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>'},
     {name:"_rels/.rels", data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'},
-    {name:"xl/workbook.xml", data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Registro" sheetId="1" r:id="rId1"/><sheet name="Resumen por día" sheetId="2" r:id="rId2"/></sheets></workbook>'},
+    {name:"xl/workbook.xml", data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Registro" sheetId="1" r:id="rId1"/><sheet name="Balance 24h" sheetId="2" r:id="rId2"/></sheets></workbook>'},
     {name:"xl/_rels/workbook.xml.rels", data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'},
     {name:"xl/styles.xml", data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="0.0"/></numFmts><fonts count="3"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font><font><b/><sz val="14"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF0F5C8C"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment wrapText="1" vertical="center"/></xf><xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>'},
-    {name:"xl/worksheets/sheet1.xml", data:sheetXml(r1,[12,8,17,14,12,12,14,30],4)},
-    {name:"xl/worksheets/sheet2.xml", data:sheetXml(r2,[12,16,10,14,12,12,12],4)},
+    {name:"xl/worksheets/sheet1.xml", data:sheetXml(r1,[15,12,8,17,14,14,12,14,30],4)},
+    {name:"xl/worksheets/sheet2.xml", data:sheetXml(r2,[17,17,14,12,18,10,10,12,12,12],4)},
   ];
   return zip(files);
 }
@@ -419,7 +439,10 @@ $("#shareBtn").onclick = async ()=>{
 };
 
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js").catch(()=>{});
-document.addEventListener("visibilitychange",()=>{ if(!document.hidden){ regs=load(KEY,regs); render(); } });
+let lastAct = jKey(Date.now());
+function tick(){ const act=jKey(Date.now()); if (act!==lastAct){ if (viewDay===lastAct) viewDay=act; lastAct=act; } render(); }
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden){ regs=load(KEY,regs); tick(); } });
+setInterval(tick, 60000);
 render();
 </script>
 </body>
