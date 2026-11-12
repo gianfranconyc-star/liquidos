@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f5c8c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Control de líquidos</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  :root{
+    --bg:#f3f6f9; --card:#fff; --ink:#1b2733; --muted:#5d6b78; --line:#dde4ea;
+    --liq:#1677c9; --liq-bg:#e4f1fc;
+    --ori:#c28a00; --ori-bg:#fdf3d8;
+    --tmp:#d2453a; --tmp-bg:#fde7e5;
+    --ok:#1f8a4c;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;background:var(--bg);color:var(--ink);
+    font:18px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  header{background:#0f5c8c;color:#fff;padding:16px 18px 18px;
+    padding-top:calc(16px + env(safe-area-inset-top))}
+  header h1{margin:0;font-size:22px;font-weight:700}
+  header .sub{opacity:.85;font-size:15px;margin-top:2px}
+  header button{float:right;background:rgba(255,255,255,.15);border:0;color:#fff;
+    font-size:22px;width:44px;height:44px;border-radius:12px}
+  main{padding:14px;max-width:560px;margin:0 auto;padding-bottom:40px}
+  .card{background:var(--card);border-radius:16px;padding:14px;margin-bottom:14px;
+    box-shadow:0 1px 3px rgba(0,0,0,.06)}
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}
+  .stat .n{font-size:26px;font-weight:800}
+  .stat .l{font-size:13px;color:var(--muted)}
+  .stat.liq .n{color:var(--liq)} .stat.ori .n{color:var(--ori)} .stat.tmp .n{color:var(--tmp)}
+  .big{display:flex;align-items:center;gap:14px;width:100%;border:0;border-radius:18px;
+    padding:18px;margin-bottom:12px;font-size:21px;font-weight:700;text-align:left;color:var(--ink)}
+  .big .ic{font-size:36px;width:52px;text-align:center}
+  .big small{display:block;font-weight:500;font-size:14px;color:var(--muted)}
+  .big.liq{background:var(--liq-bg);border:2px solid var(--liq)}
+  .big.ori{background:var(--ori-bg);border:2px solid var(--ori)}
+  .big.tmp{background:var(--tmp-bg);border:2px solid var(--tmp)}
+  .big:active{transform:scale(.98)}
+  .dayNav{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+  .dayNav button{border:0;background:var(--bg);font-size:22px;width:48px;height:44px;border-radius:12px}
+  .dayNav .d{font-weight:700;font-size:17px;text-align:center}
+  .entry{display:flex;align-items:center;gap:12px;padding:12px 4px;border-top:1px solid var(--line)}
+  .entry:first-of-type{border-top:0}
+  .entry .h{font-weight:700;font-variant-numeric:tabular-nums;width:58px}
+  .entry .ic{font-size:24px}
+  .entry .t{flex:1}
+  .entry .t small{display:block;color:var(--muted);font-size:14px}
+  .entry .edit{border:0;background:var(--bg);border-radius:10px;padding:8px 12px;font-size:15px}
+  .empty{color:var(--muted);text-align:center;padding:14px 0}
+  .fever{color:var(--tmp);font-weight:800}
+  .btn{display:block;width:100%;border:0;border-radius:14px;padding:16px;font-size:18px;
+    font-weight:700;margin-top:10px}
+  .btn.primary{background:var(--ok);color:#fff}
+  .btn.blue{background:#0f5c8c;color:#fff}
+  .btn.ghost{background:var(--bg);color:var(--ink)}
+  .btn.danger{background:#fff;color:var(--tmp);border:2px solid var(--tmp)}
+  .note{font-size:14px;color:var(--muted);margin-top:10px}
+  /* sheet */
+  .veil{position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;align-items:flex-end;z-index:10}
+  .veil.on{display:flex}
+  .sheet{background:#fff;width:100%;max-width:560px;margin:0 auto;border-radius:22px 22px 0 0;
+    padding:18px 16px calc(18px + env(safe-area-inset-bottom));max-height:92vh;overflow:auto}
+  .sheet h2{margin:0 0 4px;font-size:22px}
+  .sheet .when{color:var(--muted);font-size:15px;margin-bottom:12px}
+  .lbl{font-weight:700;margin:14px 0 8px;font-size:16px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{border:2px solid var(--line);background:#fff;border-radius:12px;padding:12px 14px;
+    font-size:18px;font-weight:600;min-width:74px}
+  .chip.sel{border-color:var(--liq);background:var(--liq-bg);color:var(--liq)}
+  .ori .chip.sel{border-color:var(--ori);background:var(--ori-bg);color:#7a5600}
+  input[type=number],input[type=text],input[type=datetime-local]{width:100%;font-size:20px;
+    padding:12px;border:2px solid var(--line);border-radius:12px;background:#fff;color:var(--ink)}
+  .temp{display:flex;align-items:center;gap:10px;justify-content:center;margin:10px 0}
+  .temp button{width:64px;height:64px;border-radius:50%;border:0;font-size:30px;font-weight:700;
+    background:var(--tmp-bg);color:var(--tmp)}
+  .temp .v{font-size:46px;font-weight:800;min-width:150px;text-align:center;font-variant-numeric:tabular-nums}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#1b2733;color:#fff;
+    padding:12px 18px;border-radius:12px;font-size:16px;z-index:20;opacity:0;transition:opacity .2s;pointer-events:none}
+  .toast.on{opacity:1}
+</style>
+</head>
+<body>
+<header>
+  <button id="cfgBtn" aria-label="Ajustes">⚙️</button>
+  <h1>Control de líquidos</h1>
+  <div class="sub" id="patientLbl"></div>
+</header>
+
+<main>
+  <div class="card">
+    <div class="stats">
+      <div class="stat liq"><div class="n" id="sLiq">0</div><div class="l">ml tomados hoy</div></div>
+      <div class="stat ori"><div class="n" id="sOri">0</div><div class="l">veces orinó hoy</div></div>
+      <div class="stat tmp"><div class="n" id="sTmp">–</div><div class="l" id="sTmpL">última temperatura</div></div>
+    </div>
+  </div>
+
+  <button class="big liq" data-open="liq"><span class="ic">💧</span><span>Tomó líquido<small>Agua, jugo, sopa…</small></span></button>
+  <button class="big ori" data-open="ori"><span class="ic">🚽</span><span>Orinó<small>Se guarda con la hora de ahora</small></span></button>
+  <button class="big tmp" data-open="tmp"><span class="ic">🌡️</span><span>Temperatura<small>Anotar grados °C</small></span></button>
+
+  <div class="card">
+    <div class="dayNav">
+      <button id="prevDay" aria-label="Día anterior">‹</button>
+      <div class="d" id="dayLbl"></div>
+      <button id="nextDay" aria-label="Día siguiente">›</button>
+    </div>
+    <div id="list"></div>
+  </div>
+
+  <div class="card">
+    <button class="btn blue" id="dlBtn">📥 Descargar Excel</button>
+    <button class="btn ghost" id="shareBtn" style="display:none">📤 Enviar Excel (WhatsApp, correo…)</button>
+    <div class="note">El Excel trae todos los registros y un resumen por día. Descárgalo de vez en cuando como respaldo.</div>
+  </div>
+</main>
+
+<!-- hoja de registro -->
+<div class="veil" id="veil"><div class="sheet" id="sheet"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+const KEY = "ctl_liquidos_v1", CFG = "ctl_liquidos_cfg_v1";
+const LIQ_TIPOS = ["Agua","Jugo","Café","Leche","Sopa","Suero","Té","Refresco"];
+const LIQ_ML = [50,100,150,200,250,300,400,500];
+
+function load(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } }
+function save(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); return true; }catch(e){ alert("No se pudo guardar en el teléfono."); return false; } }
+let regs = load(KEY, []);
+let cfg  = load(CFG, {paciente:""});
+let viewDay;
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(()=>{});
+
+const $ = s => document.querySelector(s);
+const pad = n => String(n).padStart(2,"0");
+function dayKey(t){ const d = new Date(t); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+viewDay = dayKey(Date.now());
+function hhmm(t){ const d = new Date(t); return pad(d.getHours())+":"+pad(d.getMinutes()); }
+function fecha(t){ const d = new Date(t); return pad(d.getDate())+"/"+pad(d.getMonth()+1)+"/"+d.getFullYear(); }
+function dayLabel(k){
+  const [y,m,d] = k.split("-").map(Number), dt = new Date(y,m-1,d);
+  const hoy = dayKey(Date.now()), ayer = dayKey(Date.now()-864e5);
+  const txt = dt.toLocaleDateString("es",{weekday:"long",day:"numeric",month:"long"});
+  return (k===hoy?"Hoy, ":k===ayer?"Ayer, ":"") + txt;
+}
+function fmtNum(n){ return n.toLocaleString("es-VE"); }
+function fmtT(v){ return v.toFixed(1).replace(".",","); }
+function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("on"); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove("on"),2200); }
+function esc(s){ return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+/* ---------- pantalla principal ---------- */
+function render(){
+  $("#patientLbl").textContent = cfg.paciente ? "Paciente: "+cfg.paciente : "Toca ⚙️ para poner el nombre";
+  const hoy = dayKey(Date.now()), rh = regs.filter(r=>dayKey(r.t)===hoy);
+  $("#sLiq").textContent = fmtNum(rh.filter(r=>r.tipo==="liq").reduce((a,r)=>a+(r.ml||0),0));
+  $("#sOri").textContent = rh.filter(r=>r.tipo==="ori").length;
+  const temps = regs.filter(r=>r.tipo==="tmp").sort((a,b)=>b.t-a.t);
+  if (temps.length){
+    const u = temps[0];
+    $("#sTmp").innerHTML = '<span class="'+(u.temp>=38?"fever":"")+'">'+fmtT(u.temp)+'°</span>';
+    $("#sTmpL").textContent = "a las "+hhmm(u.t)+(dayKey(u.t)===hoy?"":" ("+fecha(u.t).slice(0,5)+")");
+  } else { $("#sTmp").textContent="–"; $("#sTmpL").textContent="última temperatura"; }
+
+  $("#dayLbl").textContent = dayLabel(viewDay);
+  $("#nextDay").style.visibility = viewDay>=hoy ? "hidden" : "visible";
+  const items = regs.filter(r=>dayKey(r.t)===viewDay).sort((a,b)=>b.t-a.t);
+  if (!items.length){ $("#list").innerHTML = '<div class="empty">Sin registros este día</div>'; }
+  else {
+    const tl = items.filter(r=>r.tipo==="liq").reduce((a,r)=>a+(r.ml||0),0);
+    const to = items.filter(r=>r.tipo==="ori").length;
+    $("#list").innerHTML = '<div class="note" style="margin:0 0 6px">Total: <b>'+fmtNum(tl)+' ml</b> tomados · orinó <b>'+to+'</b> '+(to===1?"vez":"veces")+'</div>' +
+      items.map(r=>{
+        let ic, main, sub="";
+        if (r.tipo==="liq"){ ic="💧"; main=fmtNum(r.ml)+" ml"; sub=r.sub||""; }
+        else if (r.tipo==="ori"){ ic="🚽"; main="Orinó"+(r.ml?" · "+fmtNum(r.ml)+" ml":""); }
+        else { ic="🌡️"; main='<span class="'+(r.temp>=38?"fever":"")+'">'+fmtT(r.temp)+" °C</span>"; }
+        if (r.nota) sub += (sub?" · ":"")+esc(r.nota);
+        return '<div class="entry"><span class="h">'+hhmm(r.t)+'</span><span class="ic">'+ic+'</span>'+
+          '<span class="t">'+main+(sub?'<small>'+esc(sub)+'</small>':'')+'</span>'+
+          '<button class="edit" data-edit="'+r.id+'">Editar</button></div>';
+      }).join("");
+  }
+}
+
+/* ---------- hojas de registro ---------- */
+let st = {};  // estado del formulario abierto
+function openSheet(tipo, reg){
+  const editing = !!reg;
+  st = editing ? {...reg} : {tipo, t:null, ml: null, sub: "", temp:36.5, nota:""};
+  if (!editing && tipo==="tmp"){
+    const last = regs.filter(r=>r.tipo==="tmp").sort((a,b)=>b.t-a.t)[0];
+    if (last) st.temp = last.temp;
+  }
+  st.editing = editing;
+  drawSheet();
+  $("#veil").classList.add("on");
+}
+function closeSheet(){ $("#veil").classList.remove("on"); }
+
+function localInput(t){ const d=new Date(t); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())+"T"+pad(d.getHours())+":"+pad(d.getMinutes()); }
+
+function drawSheet(){
+  const s = st, sh = $("#sheet");
+  const title = {liq:"💧 Tomó líquido", ori:"🚽 Orinó", tmp:"🌡️ Temperatura"}[s.tipo];
+  let h = '<h2>'+title+'</h2>';
+  if (s.editing){
+    h += '<div class="lbl">Fecha y hora</div><input type="datetime-local" id="fT" value="'+localInput(s.t)+'">';
+  } else {
+    h += '<div class="when">Se guardará con la hora de este momento</div>';
+  }
+  if (s.tipo==="liq"){
+    h += '<div class="lbl">¿Cuánto tomó? (ml)</div><div class="chips">'+
+      LIQ_ML.map(v=>'<button class="chip'+(s.ml===v?" sel":"")+'" data-ml="'+v+'">'+v+'</button>').join("")+'</div>'+
+      '<div class="lbl">Otra cantidad</div><input type="number" inputmode="numeric" id="fMl" placeholder="ml" value="'+(LIQ_ML.includes(s.ml)?"":(s.ml||""))+'">'+
+      '<div class="lbl">¿Qué tomó?</div><input type="text" id="fSub" placeholder="Escriba qué tomó (ej: agua de coco)" value="'+esc(s.sub||"")+'">'+
+      '<div class="note" style="margin:8px 0 6px">O toque una opción:</div><div class="chips">'+
+      LIQ_TIPOS.map(v=>'<button class="chip'+(s.sub===v?" sel":"")+'" data-sub="'+v+'">'+v+'</button>').join("")+'</div>';
+  } else if (s.tipo==="ori"){
+    h += '<div class="ori"><div class="lbl">Cantidad (solo si la midió)</div><div class="chips">'+
+      ['',100,200,300,400].map(v=>'<button class="chip'+((s.ml||"")===v?" sel":"")+'" data-oml="'+v+'">'+(v===""?"No medí":v+" ml")+'</button>').join("")+'</div></div>'+
+      '<div class="lbl">Otra cantidad</div><input type="number" inputmode="numeric" id="fOMl" placeholder="ml (opcional)" value="'+([100,200,300,400].includes(s.ml)||!s.ml?"":s.ml)+'">';
+  } else {
+    h += '<div class="temp"><button data-dt="-1">−</button><span class="v" id="tV">'+fmtT(s.temp)+'°</span><button data-dt="1">+</button></div>'+
+      '<div class="note" style="text-align:center">Usa − y + para ajustar de 0,1 en 0,1</div>';
+  }
+  h += '<div class="lbl">Nota (opcional)</div><input type="text" id="fNota" placeholder="'+(s.tipo==="ori"?"Ej: color oscuro, ardor…":"Ej: con la pastilla…")+'" value="'+esc(s.nota||"")+'">';
+  h += '<button class="btn primary" id="fSave">✔ Guardar</button>';
+  if (s.editing) h += '<button class="btn danger" id="fDel">Borrar este registro</button>';
+  h += '<button class="btn ghost" id="fCancel">Cancelar</button>';
+  sh.innerHTML = h;
+}
+
+$("#sheet").addEventListener("click", e=>{
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.ml){ st.ml = +b.dataset.ml; const i=$("#fMl"); if(i) i.value=""; drawKeep(); }
+  else if (b.dataset.sub){ st.sub = b.dataset.sub; drawKeep._chip=true; drawKeep(); drawKeep._chip=false; }
+  else if (b.dataset.oml!==undefined){ st.ml = b.dataset.oml===""?null:+b.dataset.oml; const i=$("#fOMl"); if(i) i.value=""; drawKeep(); }
+  else if (b.dataset.dt){ st.temp = Math.round((st.temp + (+b.dataset.dt)*0.1)*10)/10;
+    st.temp = Math.min(43, Math.max(34, st.temp)); $("#tV").textContent = fmtT(st.temp)+"°"; }
+  else if (b.id==="fSave") doSave();
+  else if (b.id==="fDel"){ if (confirm("¿Borrar este registro?")){ regs = regs.filter(r=>r.id!==st.id); save(KEY,regs); closeSheet(); render(); toast("Registro borrado"); } }
+  else if (b.id==="fCancel") closeSheet();
+});
+function drawKeep(){ // redibuja conservando lo escrito
+  const n=$("#fNota"), t=$("#fT"), m=$("#fMl")||$("#fOMl");
+  if(n) st.nota=n.value; const sb=$("#fSub"); if(sb && !drawKeep._chip) st.sub=sb.value; if(t&&t.value) st.t=new Date(t.value).getTime();
+  if(m){ const v=parseInt(m.value,10); if(v>0) st.ml=v; }
+  drawSheet();
+}
+$("#veil").addEventListener("click", e=>{ if (e.target.id==="veil") closeSheet(); });
+
+function doSave(){
+  const s = st;
+  s.nota = ($("#fNota").value||"").trim();
+  if (s.tipo==="liq"){
+    const o = parseInt($("#fMl").value,10); if (o>0) s.ml = o;
+    if (!(s.ml>0)) return toast("Indica cuántos ml tomó");
+    s.sub = ($("#fSub").value||"").trim();
+    if (!s.sub) return toast("Escriba o toque qué tomó");
+  }
+  if (s.tipo==="ori"){ const o = parseInt($("#fOMl").value,10); if (o>0) s.ml = o; }
+  let t = Date.now();
+  if (s.editing){ const v=$("#fT").value; if (v) t = new Date(v).getTime(); }
+  const rec = {id: s.id || (Date.now().toString(36)+Math.random().toString(36).slice(2,6)), t, tipo:s.tipo};
+  if (s.tipo==="liq"){ rec.ml=s.ml; rec.sub=s.sub; }
+  if (s.tipo==="ori" && s.ml) rec.ml=s.ml;
+  if (s.tipo==="tmp") rec.temp=s.temp;
+  if (s.nota) rec.nota=s.nota;
+  regs = regs.filter(r=>r.id!==rec.id); regs.push(rec);
+  if (!save(KEY, regs)) return;
+  closeSheet(); viewDay = dayKey(rec.t); render();
+  toast(s.editing ? "Cambios guardados" : "Guardado a las "+hhmm(rec.t)+" ✔");
+}
+
+document.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",()=>openSheet(b.dataset.open)));
+$("#list").addEventListener("click", e=>{ const b=e.target.closest("[data-edit]"); if(!b) return;
+  const r = regs.find(x=>x.id===b.dataset.edit); if (r) openSheet(r.tipo, r); });
+$("#prevDay").onclick = ()=>{ const [y,m,d]=viewDay.split("-").map(Number); viewDay=dayKey(new Date(y,m-1,d-1)); render(); };
+$("#nextDay").onclick = ()=>{ const [y,m,d]=viewDay.split("-").map(Number); viewDay=dayKey(new Date(y,m-1,d+1)); render(); };
+$("#cfgBtn").onclick = ()=>{
+  const n = prompt("Nombre del paciente (sale en el Excel):", cfg.paciente||"");
+  if (n!==null){ cfg.paciente = n.trim(); save(CFG,cfg); render(); }
+};
+
+/* ---------- Excel (.xlsx) sin librerías ---------- */
+const CRC = (()=>{ const t=new Uint32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c = c&1 ? 0xEDB88320^(c>>>1) : c>>>1; t[n]=c>>>0; } return t; })();
+function crc32(u8){ let c=0xFFFFFFFF; for(let i=0;i<u8.length;i++) c = CRC[(c^u8[i])&255]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
+function zip(files){
+  const enc = new TextEncoder(), parts=[], central=[]; let off=0;
+  const d=new Date(), dt=((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate(),
+        tm=(d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()>>1);
+  for (const f of files){
+    const name=enc.encode(f.name), data=enc.encode(f.data), crc=crc32(data);
+    const lh=new DataView(new ArrayBuffer(30));
+    lh.setUint32(0,0x04034b50,true); lh.setUint16(4,20,true); lh.setUint16(6,0,true); lh.setUint16(8,0,true);
+    lh.setUint16(10,tm,true); lh.setUint16(12,dt,true); lh.setUint32(14,crc,true);
+    lh.setUint32(18,data.length,true); lh.setUint32(22,data.length,true); lh.setUint16(26,name.length,true); lh.setUint16(28,0,true);
+    parts.push(new Uint8Array(lh.buffer), name, data);
+    const ch=new DataView(new ArrayBuffer(46));
+    ch.setUint32(0,0x02014b50,true); ch.setUint16(4,20,true); ch.setUint16(6,20,true); ch.setUint16(8,0,true); ch.setUint16(10,0,true);
+    ch.setUint16(12,tm,true); ch.setUint16(14,dt,true); ch.setUint32(16,crc,true);
+    ch.setUint32(20,data.length,true); ch.setUint32(24,data.length,true); ch.setUint16(28,name.length,true);
+    ch.setUint32(42,off,true);
+    central.push(new Uint8Array(ch.buffer), name);
+    off += 30+name.length+data.length;
+  }
+  const cdSize = central.reduce((a,p)=>a+p.length,0);
+  const eo=new DataView(new ArrayBuffer(22));
+  eo.setUint32(0,0x06054b50,true); eo.setUint16(8,files.length,true); eo.setUint16(10,files.length,true);
+  eo.setUint32(12,cdSize,true); eo.setUint32(16,off,true);
+  return new Blob([...parts,...central,new Uint8Array(eo.buffer)],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+}
+const xesc = s => String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g,"");
+function colL(i){ let s=""; i++; while(i){ const m=(i-1)%26; s=String.fromCharCode(65+m)+s; i=Math.floor((i-1)/26); } return s; }
+// celda: string | number | null | {v, s}
+function sheetXml(rows, widths, freezeRow){
+  let x='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">';
+  if (freezeRow) x+='<sheetViews><sheetView workbookViewId="0"><pane ySplit="'+freezeRow+'" topLeftCell="A'+(freezeRow+1)+'" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>';
+  x+='<cols>'+widths.map((w,i)=>'<col min="'+(i+1)+'" max="'+(i+1)+'" width="'+w+'" customWidth="1"/>').join("")+'</cols><sheetData>';
+  rows.forEach((row,ri)=>{
+    x+='<row r="'+(ri+1)+'">';
+    row.forEach((c,ci)=>{
+      if (c===null||c===undefined||c==="") return;
+      let v=c, s=0; if (typeof c==="object"){ v=c.v; s=c.s||0; }
+      if (v===null||v===undefined||v==="") { if (s) x+='<c r="'+colL(ci)+(ri+1)+'" s="'+s+'"/>'; return; }
+      const ref=colL(ci)+(ri+1);
+      if (typeof v==="number") x+='<c r="'+ref+'"'+(s?' s="'+s+'"':'')+'><v>'+v+'</v></c>';
+      else x+='<c r="'+ref+'" t="inlineStr"'+(s?' s="'+s+'"':'')+'><is><t xml:space="preserve">'+xesc(v)+'</t></is></c>';
+    });
+    x+='</row>';
+  });
+  return x+'</sheetData></worksheet>';
+}
+function buildXlsx(){
+  const all = regs.slice().sort((a,b)=>a.t-b.t);
+  const H=1, T=2, N1=3; // estilos: encabezado, título, 1 decimal
+  const tipoTxt = {liq:"Líquido ingerido", ori:"Orina", tmp:"Temperatura"};
+  const gen = "Generado: "+fecha(Date.now())+" "+hhmm(Date.now());
+  const titulo = "Control de líquidos y temperatura"+(cfg.paciente?" — "+cfg.paciente:"");
+
+  const r1=[[{v:titulo,s:T}],[gen],[],
+    ["Fecha","Hora","Tipo","Líquido ingerido (ml)","Qué tomó","Orina (ml)","Temperatura (°C)","Nota"].map(v=>({v,s:H}))];
+  for (const r of all) r1.push([fecha(r.t),hhmm(r.t),tipoTxt[r.tipo],
+    r.tipo==="liq"?r.ml:null, r.tipo==="liq"?(r.sub||""):null,
+    r.tipo==="ori"?(r.ml||"No medida"):null,
+    r.tipo==="tmp"?{v:r.temp,s:N1}:null, r.nota||""]);
+
+  const dias = {};
+  for (const r of all){
+    const k=dayKey(r.t); const d = dias[k] || (dias[k]={f:fecha(r.t),liq:0,nOri:0,mlOri:0,ts:[]});
+    if (r.tipo==="liq") d.liq+=r.ml||0;
+    if (r.tipo==="ori"){ d.nOri++; d.mlOri+=r.ml||0; }
+    if (r.tipo==="tmp") d.ts.push(r.temp);
+  }
+  const r2=[[{v:"Resumen por día"+(cfg.paciente?" — "+cfg.paciente:""),s:T}],[gen],[],
+    ["Fecha","Líquido ingerido total (ml)","Veces que orinó","Orina medida total (ml)","Temp. mínima (°C)","Temp. máxima (°C)","Tomas de temperatura"].map(v=>({v,s:H}))];
+  for (const k of Object.keys(dias).sort()){
+    const d=dias[k];
+    r2.push([d.f,d.liq,d.nOri,d.mlOri||null,
+      d.ts.length?{v:Math.min(...d.ts),s:N1}:null, d.ts.length?{v:Math.max(...d.ts),s:N1}:null, d.ts.length]);
+  }
+
+  const files = [
+    {name:"[Content_Types].xml", data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>'},
+    {name:"_rels/.rels", data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'},
+    {name:"xl/workbook.xml", data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Registro" sheetId="1" r:id="rId1"/><sheet name="Resumen por día" sheetId="2" r:id="rId2"/></sheets></workbook>'},
+    {name:"xl/_rels/workbook.xml.rels", data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'},
+    {name:"xl/styles.xml", data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="0.0"/></numFmts><fonts count="3"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font><font><b/><sz val="14"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF0F5C8C"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment wrapText="1" vertical="center"/></xf><xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>'},
+    {name:"xl/worksheets/sheet1.xml", data:sheetXml(r1,[12,8,17,14,12,12,14,30],4)},
+    {name:"xl/worksheets/sheet2.xml", data:sheetXml(r2,[12,16,10,14,12,12,12],4)},
+  ];
+  return zip(files);
+}
+function fileName(){
+  const d=new Date(), n=(cfg.paciente||"").normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^A-Za-z0-9]+/g,"_").replace(/^_|_$/g,"");
+  return "Control_liquidos"+(n?"_"+n:"")+"_"+d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())+".xlsx";
+}
+$("#dlBtn").onclick = ()=>{
+  if (!regs.length) return toast("Todavía no hay registros");
+  const blob=buildXlsx(), url=URL.createObjectURL(blob), a=document.createElement("a");
+  a.href=url; a.download=fileName(); document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),4000);
+  toast("Excel descargado ✔");
+};
+(function(){
+  try{
+    const probe = new File(["x"],"a.xlsx",{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+    if (navigator.canShare && navigator.canShare({files:[probe]})) $("#shareBtn").style.display="block";
+  }catch(e){}
+})();
+$("#shareBtn").onclick = async ()=>{
+  if (!regs.length) return toast("Todavía no hay registros");
+  const f = new File([buildXlsx()], fileName(), {type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+  try{ await navigator.share({files:[f], title:"Control de líquidos"}); }
+  catch(e){ if (e.name!=="AbortError") toast("No se pudo compartir; usa Descargar"); }
+};
+
+if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js").catch(()=>{});
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden){ regs=load(KEY,regs); render(); } });
+render();
+</script>
+</body>
+</html>
