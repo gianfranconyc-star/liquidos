@@ -73,12 +73,13 @@
     font-size:18px;font-weight:600;min-width:74px}
   .chip.sel{border-color:var(--liq);background:var(--liq-bg);color:var(--liq)}
   .ori .chip.sel{border-color:var(--ori);background:var(--ori-bg);color:#7a5600}
-  input[type=number],input[type=text],input[type=datetime-local]{width:100%;font-size:20px;
+  input[type=number],input[type=text],input[type=datetime-local],input[type=time]{width:100%;font-size:20px;
     padding:12px;border:2px solid var(--line);border-radius:12px;background:#fff;color:var(--ink)}
   .temp{display:flex;align-items:center;gap:10px;justify-content:center;margin:10px 0}
   .temp button{width:64px;height:64px;border-radius:50%;border:0;font-size:30px;font-weight:700;
     background:var(--tmp-bg);color:var(--tmp)}
   .temp .v{font-size:46px;font-weight:800;min-width:150px;text-align:center;font-variant-numeric:tabular-nums}
+  .row{display:flex;gap:8px;align-items:stretch}.row input{flex:1}.row .chip{min-width:90px}
   .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#1b2733;color:#fff;
     padding:12px 18px;border-radius:12px;font-size:16px;z-index:20;opacity:0;transition:opacity .2s;pointer-events:none}
   .toast.on{opacity:1}
@@ -212,7 +213,11 @@ function drawSheet(){
   if (s.editing){
     h += '<div class="lbl">Fecha y hora</div><input type="datetime-local" id="fT" value="'+localInput(s.t)+'">';
   } else {
-    h += '<div class="when">Se guardará con la hora de este momento</div>';
+    h += '<div class="lbl">Hora</div><div class="row"><input type="time" id="fH" value="'+(s.h||"")+'">'+
+      '<button class="chip" id="fHclr">Ahora</button></div>'+
+      '<div class="chips" style="margin-top:8px">'+
+      [["0","Hoy"],["1","Ayer"]].map(([v,l])=>'<button class="chip'+((s.dia||"0")===v?" sel":"")+'" data-dia="'+v+'">'+l+'</button>').join("")+'</div>'+
+      '<div class="note">'+(s.h?"Se guardará a las <b>"+s.h+"</b> de "+((s.dia||"0")==="1"?"ayer":"hoy")+".":"Si deja la hora vacía, se usa la hora del teléfono.")+'</div>';
   }
   if (s.tipo==="liq"){
     h += '<div class="lbl">¿Cuánto tomó? (ml)</div><div class="chips">'+
@@ -239,6 +244,8 @@ function drawSheet(){
 $("#sheet").addEventListener("click", e=>{
   const b = e.target.closest("button"); if (!b) return;
   if (b.dataset.ml){ st.ml = +b.dataset.ml; const i=$("#fMl"); if(i) i.value=""; drawKeep(); }
+  else if (b.dataset.dia){ st.dia = b.dataset.dia; drawKeep(); }
+  else if (b.id==="fHclr"){ const i=$("#fH"); if(i) i.value=""; st.h=""; drawKeep(); }
   else if (b.dataset.sub){ st.sub = b.dataset.sub; drawKeep._chip=true; drawKeep(); drawKeep._chip=false; }
   else if (b.dataset.oml!==undefined){ st.ml = b.dataset.oml===""?null:+b.dataset.oml; const i=$("#fOMl"); if(i) i.value=""; drawKeep(); }
   else if (b.dataset.dt){ st.temp = Math.round((st.temp + (+b.dataset.dt)*0.1)*10)/10;
@@ -248,7 +255,8 @@ $("#sheet").addEventListener("click", e=>{
   else if (b.id==="fCancel") closeSheet();
 });
 function drawKeep(){ // redibuja conservando lo escrito
-  const n=$("#fNota"), t=$("#fT"), m=$("#fMl")||$("#fOMl");
+  const n=$("#fNota"), t=$("#fT"), m=$("#fMl")||$("#fOMl"), fh=$("#fH");
+  if(fh) st.h=fh.value;
   if(n) st.nota=n.value; const sb=$("#fSub"); if(sb && !drawKeep._chip) st.sub=sb.value; if(t&&t.value) st.t=new Date(t.value).getTime();
   if(m){ const v=parseInt(m.value,10); if(v>0) st.ml=v; }
   drawSheet();
@@ -267,6 +275,15 @@ function doSave(){
   if (s.tipo==="ori"){ const o = parseInt($("#fOMl").value,10); if (o>0) s.ml = o; }
   let t = Date.now();
   if (s.editing){ const v=$("#fT").value; if (v) t = new Date(v).getTime(); }
+  else {
+    const hv = ($("#fH").value||"").trim();
+    if (hv){
+      const [hh,mm] = hv.split(":").map(Number), d = new Date();
+      d.setDate(d.getDate() - ((s.dia||"0")==="1"?1:0)); d.setHours(hh,mm,0,0);
+      if (d.getTime() > Date.now()+60000) return toast("Esa hora todavía no ha llegado");
+      t = d.getTime();
+    }
+  }
   const rec = {id: s.id || (Date.now().toString(36)+Math.random().toString(36).slice(2,6)), t, tipo:s.tipo};
   if (s.tipo==="liq"){ rec.ml=s.ml; rec.sub=s.sub; }
   if (s.tipo==="ori" && s.ml) rec.ml=s.ml;
